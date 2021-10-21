@@ -1,12 +1,17 @@
 import os
 import logging
 
+
 from frontend.keyboard import maine_keyboard
 from services.form import Form
 from utils.configs import *
 from frontend.messages import get_full_user_name, mess_about_create_event, message_event_name, message_description, \
     message_title, message_media, message_for_change_bot
 
+from database.services.events import Events
+
+# from telegram_bot_pagination import InlineKeyboardPaginator
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
@@ -19,7 +24,8 @@ logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=os.environ["CLIENT_TOKEN"])
 
-dp = Dispatcher(bot, )
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
 
 
 @dp.message_handler(commands=['start'])
@@ -82,9 +88,11 @@ async def answer_main_buttons(message: types.Message):
 
             async with state.proxy() as data:
                 await message.photo[-1].download(f'../media/{data["event_name"]}.jpg')
-
+                data["telegram_id"] = message.from_user.id
                 data['media'] = f'{data["event_name"]}.jpg'
-                data["end_time"] = None
+                data["end_time"] = "ttt"
+
+                Events(Events.generate_relation(data.as_dict())).upsert_event()
                 list_for_save_event.append(data)
 
                 await bot.send_message(message.chat.id, text=mess_about_create_event(data),
@@ -96,8 +104,19 @@ async def answer_main_buttons(message: types.Message):
             await state.finish()
 
     elif message.text == "Каталог":
-        for i in range(len(list_for_save_event)):
-            await bot.send_message(message.chat.id, text=mess_about_create_event(list_for_save_event[i]))
+        try:
+            # paginator = InlineKeyboardPaginator(page_count=2,
+            #     current_page=len(list_for_save_event), data_pattern='page#{page}'
+            # )
+            #
+            # await bot.send_message(message.chat.id, text=f"list_for_save_event",
+            #     reply_markup=paginator.markup)
+
+            for i in range(len(list_for_save_event)):
+                await bot.send_message(message.chat.id, text=mess_about_create_event(list_for_save_event[i]))
+        except Exception as e:
+            return "no events"
+
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
